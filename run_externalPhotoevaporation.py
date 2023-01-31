@@ -77,6 +77,7 @@ sim.initialize()
 
 # Add the next line to your script after "initialize()"" to setup the external photoevaporation group and relevant updaters
 
+
 setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", star_mass = 1., UV_flux = 1000., factor_SigmaFloor = 1.e-15)
 
 # The user needs to input the location of the FRIED grid
@@ -93,6 +94,7 @@ setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", st
 # Optional dust lost tracking
 if option_track_lostdust:
     setup_lostdust(sim, using_FRIED = True)
+
 
 # Optional gas only setup
 if option_gasonly:
