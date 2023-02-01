@@ -64,6 +64,8 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     f_Sigma_FRIED_max = interp1d(r_out.reshape(shape_FRIED)[0], buffer_max * np.max(Sigma_out.reshape(shape_FRIED), axis= 0), kind='linear', fill_value = 'extrapolate' )
     f_Sigma_FRIED_min = interp1d(r_out.reshape(shape_FRIED)[0], buffer_min * np.min(Sigma_out.reshape(shape_FRIED), axis= 0), kind='linear',fill_value = 'extrapolate' )
 
+
+
     # Calculate the density limits and the corresponding mass loss rates
     r_AU = sim.grid.r / c.au
     Sigma_max = f_Sigma_FRIED_max(r_AU)

@@ -32,10 +32,16 @@ def Set_FRIED_Interpolator(Table):
     M400 = M400_FRIED(Sigma_out, r_out)
     return  LinearNDInterpolator(list(zip(M400, r_out)), Mass_loss)
 
-def MassLoss_FRIED(sim):
+def MassLoss_FRIED(sim, units_cgs = True, benchmark_Sigma = None):
     '''
     Calculates the instantaneous mass loss rate from the FRIED Grid (Haworth+, 2018) for each grid cell,
     using each r[i] as the input value r_out.
+
+    units_cgs [bool]:           Can be set to False to return the mass loss rates in logspace for benchmarking
+
+    benchmark_Sigma [array, g/cm²]: If defined, it creates a 2D grid in the r_AU - Sigma_g parameter space to test the FRIED grid interpolation
+                                    The array "benchmark_Sigma" replaces the value of sim.gas.Sigma to calcuate the mass loss rates
+                                    Use only as a standalone function for debugging
     '''
 
     r_AU = sim.grid.r / c.au
@@ -45,6 +51,18 @@ def MassLoss_FRIED(sim):
     Sigma_min = sim.FRIED.Limits.Sigma_min
     mass_loss_max = sim.FRIED.Limits.Mass_loss_max
     mass_loss_min = sim.FRIED.Limits.Mass_loss_min
+
+
+    if benchmark_Sigma is not None:
+        # If benchmarking, replace the sigma_g and r_AU by 2D grids
+        r_AU, Sigma_g = np.meshgrid(r_AU, benchmark_Sigma, indexing = "ij")     # Dimensions (nr, nSigma)
+
+        # Adjust the shape of the maximum and minimum boundaries of the grid
+        Sigma_max = Sigma_max[:, None] * np.ones_like(r_AU)
+        Sigma_min = Sigma_min[:, None] * np.ones_like(r_AU)
+        mass_loss_max = mass_loss_max[:, None] * np.ones_like(r_AU)
+        mass_loss_min = mass_loss_min[:, None] * np.ones_like(r_AU)
+
 
     # Interpolation of the mass loss rate  with the the transformed variable M400 and the outer disk radius
     FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table)
@@ -63,8 +81,9 @@ def MassLoss_FRIED(sim):
     mass_loss_FRIED[np.isnan(mass_loss_FRIED)] = -10
 
 
-    # Convert the mass loss rate to cgs units in linear space
-    mass_loss_FRIED = np.power(10, mass_loss_FRIED) * c.M_sun/c.year
+    if units_cgs:
+        # Convert the mass loss rate to cgs units in linear space
+        mass_loss_FRIED = np.power(10, mass_loss_FRIED) * c.M_sun/c.year
 
     return mass_loss_FRIED
 

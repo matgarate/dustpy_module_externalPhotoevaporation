@@ -13,13 +13,23 @@ from setup_externalPhotoevaporation import setup_externalPhotoevaporation_FRIED
 from setup_externalPhotoevaporation import setup_lostdust
 from setup_externalPhotoevaporation import setup_gasonly
 
+
+################################
+# FRIED GRID PARAMETERS
+################################
+# The stellar mass and UV flux are pre-defined to reduce the interpolation space of the FRIED grid.
+# The values stellar mass [Msun] and UV flux[G0] need to available in the FRIED grid.
+param_StellarMass = 1.0     # Available stellar masses [Msun]:     [0.05 0.1  0.3  0.5  0.8  1.   1.3  1.6  1.9 ]
+param_UVFlux = 1.e3         # Available UV fluxes [G0]:          [10.   100.  1000.  5000. 10000.]
+
+
 ################################
 # OPTIONAL PARAMETERS
 ################################
 
 option_sqrt_grid = True         # Run the simulation with a grid linearly spaced in r^1/2
-option_track_lostdust = False   # Track the time evolution of the mass lost by external photoevaporation
-option_gasonly = True           # Deactivate the dust evolution (ideal for quick tests)
+option_track_lostdust = True    # Track the time evolution of the mass lost by external photoevaporation
+option_gasonly = False           # Deactivate the dust evolution (ideal for quick tests)
 
 
 ################################
@@ -29,16 +39,16 @@ option_gasonly = True           # Deactivate the dust evolution (ideal for quick
 sim = Simulation()
 
 # Star and disk parameters
-sim.ini.star.M = 1.0 * c.M_sun              # Stellar mass
-sim.ini.gas.Mdisk = 0.1 * sim.ini.star.M    # Initial disk mass
-sim.ini.gas.SigmaRc = 60 * c.au             # Initial surface density characteristic radii
-sim.ini.gas.gamma = 1.0                     # Adiabatic Index 1.0 for Isothermal gas
+sim.ini.star.M = param_StellarMass * c.M_sun    # Stellar mass [g]
+sim.ini.gas.Mdisk = 0.1 * sim.ini.star.M        # Initial disk mass [g]
+sim.ini.gas.SigmaRc = 60 * c.au                 # Initial surface density characteristic radii [cm]
+sim.ini.gas.gamma = 1.0                         # Adiabatic Index 1.0 for Isothermal gas
 
 
 # Relevant Dust parameters
 sim.ini.dust.d2gRatio = 0.01                # Initial dust-to-gas ratio
 sim.ini.gas.alpha = 1.e-3                   # Alpha turbulence parameter
-sim.ini.dust.vfrag = 1000.0                 # Dust fragmentation velocity
+sim.ini.dust.vfrag = 1000.0                 # Dust fragmentation velocity [cm/s]
 
 
 ################################
@@ -76,18 +86,11 @@ sim.initialize()
 ################################
 
 # Add the next line to your script after "initialize()"" to setup the external photoevaporation group and relevant updaters
-
-
-setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", star_mass = 1., UV_flux = 1000., factor_SigmaFloor = 1.e-15)
+setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", star_mass = param_StellarMass, UV_flux = param_UVFlux, factor_SigmaFloor = 1.e-15)
 
 # The user needs to input the location of the FRIED grid
-# The user needs to define the stellar mass [Msun] UV flux [G0] to be used.
-
-# The values stellar mass and UV flux need to available in the FRIED grid.
-# Available stellar masses [Msun]:     [0.05 0.1  0.3  0.5  0.8  1.   1.3  1.6  1.9 ]
-# Available UV fluxes [G0]:          [10.   100.  1000.  5000. 10000.]
-
 # The gas surface density floor value is adjusted for performance
+# For this example, the stellar mass and UV flux were defined at the beginning of the script
 
 
 
