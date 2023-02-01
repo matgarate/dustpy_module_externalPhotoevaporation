@@ -50,23 +50,32 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     sim.FRIED.Table.addfield("Mass_loss", FRIED_Grid[3], description = "FRIED Mass loss rates [log10 (M_sun/year)]")
 
 
-    ## Find the surface density limits.
-    # Load the Sigma_out, r_out, and set the interpolator
-    r_out = sim.FRIED.Table.r_out
-    Sigma_out = sim.FRIED.Table.Sigma
+    # Now we find the surface density limits of the FRIED grid.
+    # Load the Table and set the interpolator
+    Table = sim.FRIED.Table
     FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table)
 
-    # Give a buffer factor, since the FRIED interpolator cannot extrapolate outside the original domain
-    buffer_max = 0.8 # buffer for the upper grid limit
-    buffer_min = 1.2 # buffer for the lower grid limit
 
-    shape_FRIED = (int(r_out.size/np.unique(r_out).size), np.unique(r_out).size)
-    f_Sigma_FRIED_max = interp1d(r_out.reshape(shape_FRIED)[0], buffer_max * np.max(Sigma_out.reshape(shape_FRIED), axis= 0), kind='linear', fill_value = 'extrapolate' )
-    f_Sigma_FRIED_min = interp1d(r_out.reshape(shape_FRIED)[0], buffer_min * np.min(Sigma_out.reshape(shape_FRIED), axis= 0), kind='linear',fill_value = 'extrapolate' )
+    # Find out the shape of the table in the r_out parameter range
+    shape_FRIED = (int(Table.r_out.size/np.unique(Table.r_out).size), np.unique(Table.r_out).size)
+
+    # Obtain the values of r_out, and the corresponding minimum and maximum value of Sigma in the Fried grid for each r_out
+    Table_r_out = Table.r_out.reshape(shape_FRIED)[0]                       # Dimension: unique(Table.r_out)
+    Table_Sigma_max = np.max(Table.Sigma.reshape(shape_FRIED), axis= 0)     # Dimension: unique(Table.r_out)
+    Table_Sigma_min = np.min(Table.Sigma.reshape(shape_FRIED), axis= 0)     # Dimension: unique(Table.r_out)
+
+    # Give a buffer factor, since the FRIED interpolator should not extrapolate outside the original
+    buffer_max = 0.9 # buffer for the Sigma upper grid limit
+    buffer_min = 1.1 # buffer for the Sigma lower grid limit
 
 
+    # The interpolation of the grid limits is performed on the logarithmic space
+    # See the FRIED grid (r_out vs. Sigma) data distribution for reference
+    f_Sigma_FRIED_max = lambda r_interp: 10**interp1d(np.log10(Table_r_out), np.log10(buffer_max * Table_Sigma_max), kind='linear', fill_value = 'extrapolate')(np.log10(r_interp))
+    f_Sigma_FRIED_min = lambda r_interp: 10**interp1d(np.log10(Table_r_out), np.log10(buffer_min * Table_Sigma_min), kind='linear', fill_value = 'extrapolate')(np.log10(r_interp))
 
-    # Calculate the density limits and the corresponding mass loss rates
+
+    # Calculate the density limits and the corresponding mass loss rates for the dustpy radial grid
     r_AU = sim.grid.r / c.au
     Sigma_max = f_Sigma_FRIED_max(r_AU)
     Sigma_min = f_Sigma_FRIED_min(r_AU)
