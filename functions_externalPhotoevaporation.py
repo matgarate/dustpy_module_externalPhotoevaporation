@@ -8,7 +8,7 @@ from scipy.interpolate import LinearNDInterpolator
 #####################################
 
 
-def M400_FRIED(Sigma_out, r_out):
+def get_M400(Sigma_out, r_out):
     '''
     Transformed variable for the FRIED Grid.
     Receives r_out [au], and sigma_out  [g/cm^2].
@@ -17,20 +17,22 @@ def M400_FRIED(Sigma_out, r_out):
     return 2 * np.pi * Sigma_out * (r_out * c.au)**2 * (r_out/400)**(-1) / c.M_jup
 
 
-def Set_FRIED_Interpolator(Table):
+def Set_FRIED_Interpolator(r_Table, Sigma_Table, MassLoss_Table):
     '''
     Returns the interpolator function, constructed from the FRIED grid data
     The interpolator takes the (M400 [Jupiter mass], r_out[au]) variables
     The interpolator returns the external photoevaporation mass loss rate [log10 (M_sun/year)]
     '''
 
-    r_out = Table.r_out
-    Sigma_out = Table.Sigma
-    Mass_loss = Table.Mass_loss
-
     # Following Sellek et al.(2020) implementation, the M400 converted variable is used to set the interpolator
-    M400 = M400_FRIED(Sigma_out, r_out)
-    return  LinearNDInterpolator(list(zip(M400, r_out)), Mass_loss)
+    M400_Table = get_M400(Sigma_Table, r_Table)
+
+    Interpolator = LinearNDInterpolator(list(zip(M400_Table, r_Table)), MassLoss_Table, fill_value = -10)
+    # Inputs outside the boundaries are set to the minimum of 1.e-10 Msun/yr
+
+    return Interpolator
+
+
 
 def MassLoss_FRIED(sim, units_cgs = True, benchmark_Sigma = None):
     '''
@@ -65,20 +67,17 @@ def MassLoss_FRIED(sim, units_cgs = True, benchmark_Sigma = None):
 
 
     # Interpolation of the mass loss rate  with the the transformed variable M400 and the outer disk radius
-    FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table)
+    FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table.r_out, sim.FRIED.Table.Sigma, sim.FRIED.Table.Mass_loss)
 
     mask_max= Sigma_g >= Sigma_max
     mask_min= Sigma_g <= Sigma_min
 
     # Calculate the mass loss rate for each grid cell according to the FRIED grid
     # Note that the mass loss rate is in logarithmic-10 space
-    mass_loss_FRIED = FRIED_Interpolator(M400_FRIED(Sigma_g, r_AU), r_AU) # Mass loss rate from the FRIED grid
+    mass_loss_FRIED = FRIED_Interpolator(get_M400(Sigma_g, r_AU), r_AU) # Mass loss rate from the FRIED grid
     mass_loss_FRIED[mask_max] = mass_loss_max[mask_max]
     mass_loss_FRIED[mask_min] = mass_loss_min[mask_min] + np.log10(Sigma_g / Sigma_min)[mask_min]
     mass_loss_FRIED[mass_loss_FRIED < -10] = -10
-
-    # Clean the NANS that were still outside the grid
-    mass_loss_FRIED[np.isnan(mass_loss_FRIED)] = -10
 
 
     if units_cgs:

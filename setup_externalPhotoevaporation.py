@@ -3,10 +3,18 @@ from dustpy import constants as c
 from scipy.interpolate import interp1d, LinearNDInterpolator
 
 
-from functions_externalPhotoevaporation import M400_FRIED, Set_FRIED_Interpolator
+from functions_externalPhotoevaporation import get_M400, Set_FRIED_Interpolator
 from functions_externalPhotoevaporation import MassLoss_FRIED
 from functions_externalPhotoevaporation import PhotoEntrainment_Size, PhotoEntrainment_Fraction
 from functions_externalPhotoevaporation import SigmaDot_ExtPhoto, SigmaDot_ExtPhoto_Dust
+
+
+
+
+
+
+
+
 
 ################################################################################################
 # Helper routine to add external photoevaporation to your Simulation object in one line.
@@ -53,7 +61,7 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     # Now we find the surface density limits of the FRIED grid.
     # Load the Table and set the interpolator
     Table = sim.FRIED.Table
-    FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table)
+    FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table.r_out, sim.FRIED.Table.Sigma, sim.FRIED.Table.Mass_loss)
 
 
     # Find out the shape of the table in the r_out parameter range
@@ -79,8 +87,8 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     r_AU = sim.grid.r / c.au
     Sigma_max = f_Sigma_FRIED_max(r_AU)
     Sigma_min = f_Sigma_FRIED_min(r_AU)
-    Mass_loss_max = FRIED_Interpolator(M400_FRIED(Sigma_max, r_AU), r_AU) # Upper limit of the mass loss rate from the fried grid
-    Mass_loss_min = FRIED_Interpolator(M400_FRIED(Sigma_min, r_AU), r_AU)  # Lower limit of the mass loss rate from the fried grid
+    Mass_loss_max = FRIED_Interpolator(get_M400(Sigma_max, r_AU), r_AU) # Upper limit of the mass loss rate from the fried grid
+    Mass_loss_min = FRIED_Interpolator(get_M400(Sigma_min, r_AU), r_AU)  # Lower limit of the mass loss rate from the fried grid
 
     # Add the upper and lower limits of the FRIED grid as Fields
     sim.FRIED.addgroup('Limits', description = "Limits of the FRIED Grid in the surface density, and the corresponding mass loss rates")
