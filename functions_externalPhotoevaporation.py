@@ -1,10 +1,12 @@
 import numpy as np
 from dustpy import constants as c
-from scipy.interpolate import LinearNDInterpolator
+from scipy.interpolate import interp1d, LinearNDInterpolator
 
 
 #####################################
+#
 # FRIED GRID ROUTINES
+#
 #####################################
 
 
@@ -33,58 +35,215 @@ def Set_FRIED_Interpolator(r_Table, Sigma_Table, MassLoss_Table):
     return Interpolator
 
 
+#####################################
+# FRIED GRID ROUTINES - CALLED ONLY ON SETUP
+#####################################
 
-def MassLoss_FRIED(sim, units_cgs = True, benchmark_Sigma = None):
+
+def get_MassLoss_SellekGrid(r_grid, Sigma_grid, r_Table, Sigma_Table, MassLoss_Table):
     '''
-    Calculates the instantaneous mass loss rate from the FRIED Grid (Haworth+, 2018) for each grid cell,
-    using each r[i] as the input value r_out.
+    Obtain the MassLoss grid in radius and Sigma, following the interpolation of Sellek et al.(2020) Eq.5
+    Note: This only work for a single stellar mass and UV Flux, already available in the FRIED grid
+    ----------------------------------------
+    r_grid, Sigma_grid:                      Radial[AU] and Surface density [g/cm^2] grid to obtain the Mass Loss interpolation
+    r_Table, Sigma_Table, MassLoss_Table:    FRIED Grid data columns (masked to match a single stellar mass and UV Flux)
 
-    units_cgs [bool]:           Can be set to False to return the mass loss rates in logspace for benchmarking
-
-    benchmark_Sigma [array, g/cm²]: If defined, it creates a 2D grid in the r_AU - Sigma_g parameter space to test the FRIED grid interpolation
-                                    The array "benchmark_Sigma" replaces the value of sim.gas.Sigma to calcuate the mass loss rates
-                                    Use only as a standalone function for debugging
+    returns
+    MassLoss_SellekGrid [log Msun/year]:     Mass loss rates as shown Figure 1. in Sellek(2020)
+    Sigma_min, Sigma_max [g/cm^2]:           Surface density limits of the FRIED grid for the given parameter space
+    ----------------------------------------
     '''
 
-    r_AU = sim.grid.r / c.au
-    Sigma_g = sim.gas.Sigma
-
-    Sigma_max = sim.FRIED.Limits.Sigma_max
-    Sigma_min = sim.FRIED.Limits.Sigma_min
-    mass_loss_max = sim.FRIED.Limits.Mass_loss_max
-    mass_loss_min = sim.FRIED.Limits.Mass_loss_min
+    # Obtain the FRIED interpolator function that returns the Mass loss, given a (M400, r) input
+    FRIED_Interpolator = Set_FRIED_Interpolator(r_Table, Sigma_Table, MassLoss_Table)
 
 
-    if benchmark_Sigma is not None:
-        # If benchmarking, replace the sigma_g and r_AU by 2D grids
-        r_AU, Sigma_g = np.meshgrid(r_AU, benchmark_Sigma, indexing = "ij")     # Dimensions (nr, nSigma)
-
-        # Adjust the shape of the maximum and minimum boundaries of the grid
-        Sigma_max = Sigma_max[:, None] * np.ones_like(r_AU)
-        Sigma_min = Sigma_min[:, None] * np.ones_like(r_AU)
-        mass_loss_max = mass_loss_max[:, None] * np.ones_like(r_AU)
-        mass_loss_min = mass_loss_min[:, None] * np.ones_like(r_AU)
+    # Find out the shape of the table in the r_Table parameter range
+    shape_FRIED = (int(r_Table.size/np.unique(r_Table).size), np.unique(r_Table).size)
 
 
-    # Interpolation of the mass loss rate  with the the transformed variable M400 and the outer disk radius
-    FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table.r_out, sim.FRIED.Table.Sigma, sim.FRIED.Table.Mass_loss)
+    # Obtain the values of r_Table, and the corresponding minimum and maximum value of Sigma in the Fried grid for each r_Table
+    r_Table = r_Table.reshape(shape_FRIED)[0]                           # Dimension: unique(Table.r_Table)
+    Sigma_max = np.max(Sigma_Table.reshape(shape_FRIED), axis= 0)     # Dimension: unique(Table.r_Table)
+    Sigma_min = np.min(Sigma_Table.reshape(shape_FRIED), axis= 0)     # Dimension: unique(Table.r_Table)
 
-    mask_max= Sigma_g >= Sigma_max
-    mask_min= Sigma_g <= Sigma_min
+    # Give a buffer factor, since the FRIED interpolator should not extrapolate outside the original
+    buffer_max = 0.9 # buffer for the Sigma upper grid limit
+    buffer_min = 1.1 # buffer for the Sigma lower grid limit
+
+
+    # The interpolation of the grid limits is performed on the logarithmic space
+    # See the FRIED grid (r_Table vs. Sigma) data distribution for reference
+    f_Sigma_FRIED_max = lambda r_interp: 10**interp1d(np.log10(r_Table), np.log10(buffer_max * Sigma_max), kind='linear', fill_value = 'extrapolate')(np.log10(r_interp))
+    f_Sigma_FRIED_min = lambda r_interp: 10**interp1d(np.log10(r_Table), np.log10(buffer_min * Sigma_min), kind='linear', fill_value = 'extrapolate')(np.log10(r_interp))
+
+
+
+    # Calculate the density limits and the corresponding mass loss rates for the custom radial grid
+    Sigma_max = f_Sigma_FRIED_max(r_grid)
+    Sigma_min = f_Sigma_FRIED_min(r_grid)
+
+    # Calculate the limits of M400 for the respective Sigma_max and Sigma_min
+    M400_max = get_M400(Sigma_max, r_grid)
+    M400_min = get_M400(Sigma_min, r_grid)
+
+    MassLoss_max = FRIED_Interpolator(M400_max, r_grid)  # Upper limit of the mass loss rate from the fried grid
+    MassLoss_min = FRIED_Interpolator(M400_min, r_grid)  # Lower limit of the mass loss rate from the fried grid
+
+
+    # Mask the regions where the custom Sigma grid is outside the FRIED boundaries
+    mask_max= Sigma_grid >= Sigma_max
+    mask_min= Sigma_grid <= Sigma_min
 
     # Calculate the mass loss rate for each grid cell according to the FRIED grid
     # Note that the mass loss rate is in logarithmic-10 space
-    mass_loss_FRIED = FRIED_Interpolator(get_M400(Sigma_g, r_AU), r_AU) # Mass loss rate from the FRIED grid
-    mass_loss_FRIED[mask_max] = mass_loss_max[mask_max]
-    mass_loss_FRIED[mask_min] = mass_loss_min[mask_min] + np.log10(Sigma_g / Sigma_min)[mask_min]
-    mass_loss_FRIED[mass_loss_FRIED < -10] = -10
+    M400_grid = get_M400(Sigma_grid, r_grid)
+
+    MassLoss_SellekGrid = FRIED_Interpolator(M400_grid, r_grid) # Mass loss rate from the FRIED grid
+    MassLoss_SellekGrid[mask_max] = MassLoss_max[mask_max]
+    MassLoss_SellekGrid[mask_min] = MassLoss_min[mask_min] + np.log10(Sigma_grid / Sigma_min)[mask_min]
+    MassLoss_SellekGrid[MassLoss_SellekGrid < -10] = -10
+
+    return MassLoss_SellekGrid, Sigma_min, Sigma_max
+
+def get_mask_StarUV(Mstar_value, UV_value, Mstar_Table, UV_Table):
+    '''
+    Construct a boolean mask that indicates rows of the FRIED Grid where Mstar_value and UV_value are present
+    Mstar_value, UV_value must be available values of the FRIED Grid
+    '''
+    mask_Mstar = Mstar_Table == Mstar_value
+    mask_UV = UV_Table == UV_value
+    mask = mask_UV * mask_Mstar
+
+    return mask
+
+def get_weights_StarUV(Mstar_value, UV_value, Mstar_lr, UV_lr):
+
+    '''
+    Returns the linear interpolation weights for a given Mstar and UV value, within a rectangle Mstar UV rectangle.
+    '''
+    f_Mstar =  (Mstar_value - Mstar_lr[0]) / (Mstar_lr[1] - Mstar_lr[0])
+    f_UV =  (UV_value - UV_lr[0]) / (UV_lr[1] - UV_lr[0])
+
+    f_weights = np.array([1. - f_Mstar, f_Mstar])[:, None] * np.array([1. - f_UV, f_UV])[None, :]
+    return f_weights
 
 
-    if units_cgs:
-        # Convert the mass loss rate to cgs units in linear space
-        mass_loss_FRIED = np.power(10, mass_loss_FRIED) * c.M_sun/c.year
+def get_MassLoss_ResampleGrid(fried_filename = "./friedgrid.dat",
+                              Mstar_target = 1., UV_target = 1000.,
+                              grid_radii = None, grid_Sigma = None):
+    '''
+    Resample the FRIED grid into a new radial-Sigma grid for a target stellar mass and UV Flux
+    --------------------------------------------
+    fried_filename:                      FRIED grid from Haworth+(2018), download from: http://www.friedgrid.com/Downloads/
+    Mstar_target [M_sun]:                Target stellar mass to reconstruct the FRIED grid
+    UV_target [G0]:                      Target external UV flux to reconstruct the FRIED grid
 
-    return mass_loss_FRIED
+    grid_radii[array (nr), AU]:                      Target radial grid array to reconstruct the FRIED grid
+    grid_Sigma[array (nSig), g/cm^2]:                Target Sigma grid array to reconstruct the FRIED grid
+
+    returns
+    grid_MassLoss [array (nr, nSig), log(Msun/yr)]: Resampled Mass loss grid.
+    --------------------------------------------
+
+    '''
+    if grid_radii is None:
+        grid_radii = np.linspace(1, 400, num = 50)
+    if grid_Sigma is None:
+        grid_Sigma = np.logspace(-5, 3, num = 100)
+
+
+    FRIED_Grid = np.loadtxt(fried_filename, unpack=True, skiprows=1)
+
+    Table_Mstar = FRIED_Grid[0]
+    Table_UV = FRIED_Grid[1]
+    Table_Sigma = FRIED_Grid[3]
+    Table_rout = FRIED_Grid[4]
+    Table_MassLoss = FRIED_Grid[5]
+
+
+    #################################################################################
+    # CREATE THE RADII-SIGMA MESHGRID AND THE SHAPE OF THE OUTPUT
+    #################################################################################
+
+    grid_radii, grid_Sigma = np.meshgrid(grid_radii, grid_Sigma, indexing = "ij")
+
+    # This is the mass loss grid that we want to use for interpolation during simulation time
+    grid_MassLoss = np.zeros_like(grid_radii)
+
+
+    #################################################################################
+    # FIND THE CLOSEST VALUES FOR THE STELLAR MASS AND UV FLUX IN THE FRIED GRID
+    #################################################################################
+
+    unique_Mstar = np.unique(Table_Mstar)
+    unique_UV = np.unique(Table_UV)
+
+    i_Mstar = np.searchsorted(unique_Mstar, Mstar_target)
+    i_UV = np.searchsorted(unique_UV, UV_target)
+
+    # Left/Right values around the available UV and Star Flux
+    Mstar_lr = unique_Mstar[[i_Mstar - 1 , i_Mstar]]
+    UV_lr = unique_UV[[i_UV - 1, i_UV]]
+
+    #################################################################################
+    # CONSTRUCT A MASS LOSS GRID FOR EACH OF THE CLOSEST STELLAR MASSES AND FLUXES
+    #################################################################################
+
+    grid_MassLoss_StarUV = []
+    for Mstar_value in Mstar_lr:
+        grid_MassLoss_StarUV.append([])
+        for UV_value in UV_lr:
+            # Mask the FRIED grid for available Mstar and UV values
+            mask = get_mask_StarUV(Mstar_value, UV_value, Table_Mstar, Table_UV)
+
+            # Save the MassLoss grid into a collection
+            # The function also returns the surface density limits, but we do not need them here
+            grid_MassLoss_dummy = get_MassLoss_SellekGrid(grid_radii, grid_Sigma, Table_rout[mask], Table_Sigma[mask], Table_MassLoss[mask])[0]
+            grid_MassLoss_StarUV[-1].append(grid_MassLoss_dummy)
+    grid_MassLoss_StarUV = np.array(grid_MassLoss_StarUV)
+
+
+    #################################################################################
+    # GET THE FINAL MASS LOSS GRID FOR THE TARGET UV FLUX AND STELLAR MASS
+    #################################################################################
+
+    interpolation_weights = get_weights_StarUV(Mstar_target, UV_target, Mstar_lr, UV_lr)
+    grid_MassLoss = (interpolation_weights[:, :, None, None] * grid_MassLoss_StarUV).sum(axis=(0,1))
+
+    # Return both the resampled grid for mass loss rates, and an interpolator function for it.
+    # This is to avoid building the interpolator multiple times during the simulation run
+    grid_MassLoss_Interpolator = Set_FRIED_Interpolator(grid_radii.flatten(), grid_Sigma.flatten(), grid_MassLoss.flatten())
+
+    return grid_MassLoss, grid_MassLoss_Interpolator
+
+
+##########################################################################
+# UPDATER OF THE MASS LOSS FROM THE FRIED GRID
+##########################################################################
+
+# Called every timestep
+def MassLoss_FRIED(sim):
+    '''
+    Calculates the instantaneous mass loss rate from the FRIED Grid (Haworth+, 2018) for each grid cell,
+
+    '''
+
+    # Interpolate the FRIED grid using the simulation radii and Sigma
+    r_AU = sim.grid.r/c.au
+    Sigma_g = sim.gas.Sigma
+    M400 = get_M400(Sigma_g, r_AU)
+
+    # Calls the interpolator hidden inside the FRIED class
+    # This way it is not necessary to construct the interpolator every timestep, which is really time consuming
+    MassLoss = sim.FRIED._Interpolator(M400, r_AU)
+
+    # Convert to cgs
+    MassLoss = np.power(10, MassLoss) * c.M_sun/c.year
+
+    return MassLoss
+
+
 
 #####################################
 # GAS LOSS RATE
@@ -108,6 +267,10 @@ def SigmaDot_ExtPhoto(sim):
 
     # Total mass loss rate.
     mass_loss_ext = np.sum((sim.FRIED.MassLoss * mass_profile)[ir_ext:] / mass_ext)
+
+    # Under the threshold further mass loss is prevented
+    if mass_loss_ext <= sim.FRIED.Threshold_MassLoss:
+        mass_loss_ext = 0.
 
     # Obtain the surface density profile using the mass of each ring as a weight factor
     # Remember to add the (-) sign to the surface density mass loss rate

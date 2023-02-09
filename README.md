@@ -7,7 +7,7 @@ To setup the external photoevaporation module, add the following lines after ini
 
 `from setup_externalPhotoevaporation import setup_externalPhotoevaporation_FRIED`
 
-`setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", star_mass = 1., UV_flux = 1000., factor_SigmaFloor = 1.e-15)`
+`setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", star_mass = 1., UV_flux = 1000.)`
 
 
 See the `run_externalPhotoevaporation.py` code for an example.

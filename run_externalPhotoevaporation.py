@@ -86,7 +86,7 @@ sim.initialize()
 ################################
 
 # Add the next line to your script after "initialize()"" to setup the external photoevaporation group and relevant updaters
-setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", star_mass = param_StellarMass, UV_flux = param_UVFlux, factor_SigmaFloor = 1.e-15)
+setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", UV_Flux = 1000.)
 
 # The user needs to input the location of the FRIED grid
 # The gas surface density floor value is adjusted for performance

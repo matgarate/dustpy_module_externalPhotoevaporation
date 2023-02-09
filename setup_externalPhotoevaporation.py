@@ -1,18 +1,11 @@
 import numpy as np
 from dustpy import constants as c
-from scipy.interpolate import interp1d, LinearNDInterpolator
 
 
-from functions_externalPhotoevaporation import get_M400, Set_FRIED_Interpolator
+from functions_externalPhotoevaporation import get_MassLoss_ResampleGrid
 from functions_externalPhotoevaporation import MassLoss_FRIED
 from functions_externalPhotoevaporation import PhotoEntrainment_Size, PhotoEntrainment_Fraction
 from functions_externalPhotoevaporation import SigmaDot_ExtPhoto, SigmaDot_ExtPhoto_Dust
-
-
-
-
-
-
 
 
 
@@ -20,9 +13,12 @@ from functions_externalPhotoevaporation import SigmaDot_ExtPhoto, SigmaDot_ExtPh
 # Helper routine to add external photoevaporation to your Simulation object in one line.
 ################################################################################################
 
-def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", star_mass = 1., UV_flux = 1000., factor_SigmaFloor = 1.e-15):
+def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", UV_Flux = 1000.,
+                                            factor_SigmaFloor = 1.e-15, threshold_MassLoss = 1.05e-10 * c.M_sun/c.year):
     '''
     Add external photoevaporation using the FRIED grid (Haworth et al., 2018) and the Sellek et al.(2020) implementation.
+    This setup routine also performs the interpolation in the stellar mass and UV flux parameters.
+
     Call the setup function after the initialization and then run, as follows:
 
     sim.initialize()
@@ -30,79 +26,54 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     sim.run()
     ----------------------------------------------
 
-    fried_filename:     FRIED grid from Haworth+(2018), download from: http://www.friedgrid.com/Downloads/
-    star_mass [M_sun]:          Stellar mass. It must be included in the FRIED grid: [0.05 0.1  0.3  0.5  0.8  1.   1.3  1.6  1.9 ]
-    UV_flux [G0]:            External UV flux field. It must be included in the FRIED grid: [10.   100.  1000.  5000. 10000.]
+    fried_filename:             FRIED grid from Haworth+(2018), download from: http://www.friedgrid.com/Downloads/
+    UV_target [G0]:             External UV Flux
+
+    factor_SigmaFloor:          Re-adjust the floor value of the gas surface density to improve the simulation performance
+    threshold_MassLoss[g/s]:    Further mass loss is prevented if the estimated mass loss rate drops below this treshold
+
+    ----------------------------------------------
     '''
 
+
     ##################################
-    # LOAD FRIED GRID
+    # SET THE FRIED GRID
     ##################################
-    FRIED_Grid = np.loadtxt(fried_filename, unpack=True, skiprows=1)
 
-    # Check that the stellar mass and the UV flux match those within the grid.
-    if not star_mass in FRIED_Grid[0]:
-        print("Star mass not available in FRIED")
-    if not UV_flux in FRIED_Grid[1]:
-        print("UV Flux not available in FRIED")
-
-    FRIED_Grid = FRIED_Grid[1:, FRIED_Grid[0] == star_mass] # Remove the stellar mass dependency by picking one of the available masses
-    FRIED_Grid = FRIED_Grid[1:, FRIED_Grid[0] == UV_flux] # Remove the UV_Field Dependency, which will be fixed, and pick one available brigthness
-
-
+    # Obtain a resampled version of the FRIED grid for the simulation stellar mass and UV_flux.
     # Set the external photoevaporation Fields
-    sim.addgroup('FRIED', description = "FRIED table to calculate mass loss rates due to external photoevaporation")
-    sim.FRIED.addgroup('Table', description = "Mass loss rate table")
-    sim.FRIED.Table.addfield("Sigma", FRIED_Grid[1], description = "Surface density input to calculate FRIED mass loss rates [g/cm^2]")
-    sim.FRIED.Table.addfield("r_out", FRIED_Grid[2], description ="Outer disk radius input to calculate FRIED mass loss rates [AU]")
-    sim.FRIED.Table.addfield("Mass_loss", FRIED_Grid[3], description = "FRIED Mass loss rates [log10 (M_sun/year)]")
 
 
-    # Now we find the surface density limits of the FRIED grid.
-    # Load the Table and set the interpolator
-    Table = sim.FRIED.Table
-    FRIED_Interpolator =  Set_FRIED_Interpolator(sim.FRIED.Table.r_out, sim.FRIED.Table.Sigma, sim.FRIED.Table.Mass_loss)
+    # Define a parameter space for the resampled radial and Sigma grids
+    grid_radii = np.concatenate((np.array([1, 5]), np.linspace(10,400, num = 40)))
+    grid_Sigma = np.concatenate((np.array([1e-8, 1e-6]), np.logspace(-5, 4, num = 100)))
+
+    # Obtain the mass loss grid.
+    # Also obtain the interpolator(M400, Sigma) function to include in the FRIED class as a hidden function
+    grid_MassLoss, grid_MassLoss_Interpolator = get_MassLoss_ResampleGrid(fried_filename= fried_filename,
+                                                                            Mstar_target= sim.star.M[0]/c.M_sun, UV_target= UV_Flux,
+                                                                            grid_radii= grid_radii, grid_Sigma= grid_Sigma)
 
 
-    # Find out the shape of the table in the r_out parameter range
-    shape_FRIED = (int(Table.r_out.size/np.unique(Table.r_out).size), np.unique(Table.r_out).size)
+    sim.addgroup('FRIED', description = "FRIED grid used to calculate mass loss rates due to external photoevaporation")
+    sim.FRIED.addgroup('Table', description = "(Resampled) Table of the mass loss rates for a given radial-Sigma grid.")
+    sim.FRIED.Table.addfield("radii", grid_radii, description ="Outer disk radius input to calculate FRIED mass loss rates [AU], (array, nr)")
+    sim.FRIED.Table.addfield("Sigma", grid_Sigma, description = "Surface density grid to calculate FRIED mass loss rates [g/cm^2] (array, nSigma)")
+    sim.FRIED.Table.addfield("MassLoss", grid_MassLoss, description = "FRIED Mass loss rates [log10 (M_sun/year)] (grid, nr*nSigma)")
 
-    # Obtain the values of r_out, and the corresponding minimum and maximum value of Sigma in the Fried grid for each r_out
-    Table_r_out = Table.r_out.reshape(shape_FRIED)[0]                       # Dimension: unique(Table.r_out)
-    Table_Sigma_max = np.max(Table.Sigma.reshape(shape_FRIED), axis= 0)     # Dimension: unique(Table.r_out)
-    Table_Sigma_min = np.min(Table.Sigma.reshape(shape_FRIED), axis= 0)     # Dimension: unique(Table.r_out)
-
-    # Give a buffer factor, since the FRIED interpolator should not extrapolate outside the original
-    buffer_max = 0.9 # buffer for the Sigma upper grid limit
-    buffer_min = 1.1 # buffer for the Sigma lower grid limit
-
-
-    # The interpolation of the grid limits is performed on the logarithmic space
-    # See the FRIED grid (r_out vs. Sigma) data distribution for reference
-    f_Sigma_FRIED_max = lambda r_interp: 10**interp1d(np.log10(Table_r_out), np.log10(buffer_max * Table_Sigma_max), kind='linear', fill_value = 'extrapolate')(np.log10(r_interp))
-    f_Sigma_FRIED_min = lambda r_interp: 10**interp1d(np.log10(Table_r_out), np.log10(buffer_min * Table_Sigma_min), kind='linear', fill_value = 'extrapolate')(np.log10(r_interp))
-
-
-    # Calculate the density limits and the corresponding mass loss rates for the dustpy radial grid
-    r_AU = sim.grid.r / c.au
-    Sigma_max = f_Sigma_FRIED_max(r_AU)
-    Sigma_min = f_Sigma_FRIED_min(r_AU)
-    Mass_loss_max = FRIED_Interpolator(get_M400(Sigma_max, r_AU), r_AU) # Upper limit of the mass loss rate from the fried grid
-    Mass_loss_min = FRIED_Interpolator(get_M400(Sigma_min, r_AU), r_AU)  # Lower limit of the mass loss rate from the fried grid
-
-    # Add the upper and lower limits of the FRIED grid as Fields
-    sim.FRIED.addgroup('Limits', description = "Limits of the FRIED Grid in the surface density, and the corresponding mass loss rates")
-    sim.FRIED.Limits.addfield('Sigma_min', Sigma_min, description = "Lower limit of the gas surface density [g/cm^2]")
-    sim.FRIED.Limits.addfield('Sigma_max', Sigma_max, description = "Upper limit of the gas surface density [g/cm^2]")
-    sim.FRIED.Limits.addfield('Mass_loss_min', Mass_loss_min, description = "Lower limit of mass loss rate [log10 (M_sun/year)]")
-    sim.FRIED.Limits.addfield('Mass_loss_max', Mass_loss_max, description = "Upper limit of mass loss rate [log10 (M_sun/year)]")
-
+    # We use this hidden _Interpolator function to avoid constructing the FRIED interpolator multiple times
+    sim.FRIED._Interpolator = grid_MassLoss_Interpolator
 
     # Add the Mass Loss Rate field from the FRIED Grid
     sim.FRIED.addfield('MassLoss', np.zeros_like(sim.grid.r), description = 'Mass loss rate obtained by interpolating the FRIED Table at each grid cell [g/s]')
+
     sim.FRIED.MassLoss.updater =  MassLoss_FRIED
     sim.updater = ['star', 'grid', 'FRIED', 'gas', 'dust']
     sim.FRIED.updater = ['MassLoss']
+
+    # Set a loss rate threshold
+    # Prevents the simulation from getting stuck at very low disk masses
+    sim.FRIED.addfield('Threshold_MassLoss', threshold_MassLoss, description = 'Further mass loss is prevented if the estimated value is below the threshold [g/s]')
 
 
     ###############################
@@ -120,8 +91,6 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     sim.dust.Photo_Ent.updater = ['a_ent', 'f_ent']
     sim.dust.updater = ['delta', 'rhos', 'fill', 'a', 'St', 'H', 'rho', 'backreaction', 'v', 'D', 'eps', 'kernel', 'p', 'Photo_Ent','S']
 
-
-
     ###################################
     # ASSING GAS AND DUST LOSS RATES
     ###################################
@@ -137,8 +106,12 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     # Setting higher floor value than the default avoids excessive mass loss rate calculations at the outer edge.
     # This speeds the code significantly, while still reproducing the results from Sellek et al.(2020)
     sim.gas.SigmaFloor = factor_SigmaFloor * sim.gas.Sigma
+    sim.gas.SigmaFloor[-1] = 1.e-25
 
     sim.update()
+
+
+
 
 
 ################################################################################################
