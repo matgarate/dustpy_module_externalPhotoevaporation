@@ -125,13 +125,19 @@ def get_mask_StarUV(Mstar_value, UV_value, Mstar_Table, UV_Table):
 
     return mask
 
+
+
 def get_weights_StarUV(Mstar_value, UV_value, Mstar_lr, UV_lr):
 
     '''
-    Returns the linear interpolation weights for a given Mstar and UV value, within a rectangle Mstar UV rectangle.
+    Returns the interpolation weights for a given Mstar-UV value pair, within a rectangle Mstar-UV rectangle.
+    The bi-linear interpolation is performed in the logpace of the Mstar-UV space
     '''
-    f_Mstar =  (Mstar_value - Mstar_lr[0]) / (Mstar_lr[1] - Mstar_lr[0])
-    f_UV =  (UV_value - UV_lr[0]) / (UV_lr[1] - UV_lr[0])
+
+    logspace_weight = lambda value, left, right: (np.log10(value) - np.log10(left)) / (np.log10(right) - np.log10(left))
+
+    f_Mstar = logspace_weight(Mstar_value, Mstar_lr[0], Mstar_lr[1])
+    f_UV = logspace_weight(UV_value, UV_lr[0], UV_lr[1])
 
     f_weights = np.array([1. - f_Mstar, f_Mstar])[:, None] * np.array([1. - f_UV, f_UV])[None, :]
     return f_weights
