@@ -49,7 +49,7 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     grid_Sigma = np.concatenate((np.array([1e-8, 1e-6]), np.logspace(-5, 4, num = 100)))
 
     # Obtain the mass loss grid.
-    # Also obtain the interpolator(M400, Sigma) function to include in the FRIED class as a hidden function
+    # Also obtain the interpolator(M400, r) function to include in the FRIED class as a hidden function
     grid_MassLoss, grid_MassLoss_Interpolator = get_MassLoss_ResampleGrid(fried_filename= fried_filename,
                                                                             Mstar_target= sim.star.M[0]/c.M_sun, UV_target= UV_Flux,
                                                                             grid_radii= grid_radii, grid_Sigma= grid_Sigma)

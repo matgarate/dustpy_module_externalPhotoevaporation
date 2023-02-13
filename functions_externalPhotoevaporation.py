@@ -24,15 +24,23 @@ def Set_FRIED_Interpolator(r_Table, Sigma_Table, MassLoss_Table):
     Returns the interpolator function, constructed from the FRIED grid data
     The interpolator takes the (M400 [Jupiter mass], r_out[au]) variables
     The interpolator returns the external photoevaporation mass loss rate [log10 (M_sun/year)]
+
+    The interpolation is performed on the loglog space.
     '''
 
     # Following Sellek et al.(2020) implementation, the M400 converted variable is used to set the interpolator
     M400_Table = get_M400(Sigma_Table, r_Table)
 
-    Interpolator = LinearNDInterpolator(list(zip(M400_Table, r_Table)), MassLoss_Table, fill_value = -10)
+
+    # Interpolation in the [log(M400), log(r_out) -> log(MassLoss)] parameter space
+    Interpolator = LinearNDInterpolator(list(zip(np.log10(M400_Table), np.log10(r_Table))), MassLoss_Table, fill_value = -10)
     # Inputs outside the boundaries are set to the minimum of 1.e-10 Msun/yr
 
-    return Interpolator
+
+    # Return a Lambda function that converts the linear M400,r inputs to the logspace to perform the interpolation.
+    return lambda M400, r: Interpolator(np.log10(M400), np.log10(r))
+
+
 
 
 #####################################
@@ -139,11 +147,13 @@ def get_MassLoss_ResampleGrid(fried_filename = "./friedgrid.dat",
     Mstar_target [M_sun]:                Target stellar mass to reconstruct the FRIED grid
     UV_target [G0]:                      Target external UV flux to reconstruct the FRIED grid
 
-    grid_radii[array (nr), AU]:                      Target radial grid array to reconstruct the FRIED grid
-    grid_Sigma[array (nSig), g/cm^2]:                Target Sigma grid array to reconstruct the FRIED grid
+    grid_radii[array (nr), AU]:                     Target radial grid array to reconstruct the FRIED grid
+    grid_Sigma[array (nSig), g/cm^2]:               Target Sigma grid array to reconstruct the FRIED grid
 
     returns
     grid_MassLoss [array (nr, nSig), log(Msun/yr)]: Resampled Mass loss grid.
+    grid_MassLoss_Interpolator:                     A function that returns the interpolated value based on the grid_MassLoss
+                                                    The interpolator inputs are M400 [Jupiter mass] and r [AU]
     --------------------------------------------
 
     '''
