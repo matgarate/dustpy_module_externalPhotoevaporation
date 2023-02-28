@@ -3,7 +3,7 @@ from dustpy import constants as c
 
 
 from functions_externalPhotoevaporation import get_MassLoss_ResampleGrid
-from functions_externalPhotoevaporation import MassLoss_FRIED
+from functions_externalPhotoevaporation import MassLoss_FRIED, TruncationRadius
 from functions_externalPhotoevaporation import PhotoEntrainment_Size, PhotoEntrainment_Fraction
 from functions_externalPhotoevaporation import SigmaDot_ExtPhoto, SigmaDot_ExtPhoto_Dust
 
@@ -61,15 +61,24 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     sim.FRIED.Table.addfield("Sigma", grid_Sigma, description = "Surface density grid to calculate FRIED mass loss rates [g/cm^2] (array, nSigma)")
     sim.FRIED.Table.addfield("MassLoss", grid_MassLoss, description = "FRIED Mass loss rates [log10 (M_sun/year)] (grid, nr*nSigma)")
 
+
+
     # We use this hidden _Interpolator function to avoid constructing the FRIED interpolator multiple times
     sim.FRIED._Interpolator = grid_MassLoss_Interpolator
+
+
+
+    # Add the truncation radius
+    sim.FRIED.addfield('rTrunc', sim.grid.r[-1], description = 'Truncation radius [cm]')
 
     # Add the Mass Loss Rate field from the FRIED Grid
     sim.FRIED.addfield('MassLoss', np.zeros_like(sim.grid.r), description = 'Mass loss rate obtained by interpolating the FRIED Table at each grid cell [g/s]')
 
+
+    sim.FRIED.rTrunc.updater = TruncationRadius
     sim.FRIED.MassLoss.updater =  MassLoss_FRIED
     sim.updater = ['star', 'grid', 'FRIED', 'gas', 'dust']
-    sim.FRIED.updater = ['MassLoss']
+    sim.FRIED.updater = ['rTrunc' ,'MassLoss']
 
     # Set a loss rate threshold
     # Prevents the simulation from getting stuck at very low disk masses

@@ -235,7 +235,7 @@ def get_MassLoss_ResampleGrid(fried_filename = "./friedgrid.dat",
 
 
 ##########################################################################
-# UPDATER OF THE MASS LOSS FROM THE FRIED GRID
+# UPDATER OF THE MASS LOSS FROM THE FRIED GRID AND TRUNCATION RADIUS
 ##########################################################################
 
 # Called every timestep
@@ -257,8 +257,24 @@ def MassLoss_FRIED(sim):
     # Convert to cgs
     MassLoss = np.power(10, MassLoss) * c.M_sun/c.year
 
+
     return MassLoss
 
+def TruncationRadius(sim):
+    '''
+    Find the photoevaporative radii.
+    See Sellek et al. (2020) Figure 2 for reference.
+    '''
+
+    #ir_ext = np.argmax(sim.FRIED.MassLoss)
+    #ir_ext = np.size(sim.FRIED.MassLoss) - np.argmax(sim.FRIED.MassLoss[::-1]) - 1
+
+    # round to 10^-12 solar masses per year
+    MassLoss = np.round(MassLoss, 12)
+    ir_ext = np.size(MassLoss) - np.argmax(MassLoss[::-1]) - 1
+
+
+    return sim.grid.r[ir_ext]
 
 
 #####################################
@@ -266,23 +282,19 @@ def MassLoss_FRIED(sim):
 #####################################
 
 def SigmaDot_ExtPhoto(sim):
-
     '''
     Compute the Mass Loss Rate profile using Sellek+(2020) approach, using the mass loss rates from the FRIED grid of Haworth+(2018)
     '''
 
-
-    # Find the photoevaporative radii.
-    # See Sellek et al. (2020) Figure 2 for reference.
-    ir_ext = np.argmax(sim.FRIED.MassLoss)
-
+    # Mask the regions that should be subject to external photoevaporation
+    mask = sim.grid.r >= sim.FRIED.rTrunc
 
     # Obtain Mass at each radial ring and total mass outside the photoevaporative radius
     mass_profile = sim.grid.A * sim.gas.Sigma
-    mass_ext = np.sum(mass_profile[ir_ext:])
+    mass_ext = np.sum(mass_profile[mask])
 
     # Total mass loss rate.
-    mass_loss_ext = np.sum((sim.FRIED.MassLoss * mass_profile)[ir_ext:] / mass_ext)
+    mass_loss_ext = np.sum((sim.FRIED.MassLoss * mass_profile)[mask] / mass_ext)
 
     # Under the threshold further mass loss is prevented
     if mass_loss_ext <= sim.FRIED.Threshold_MassLoss:
@@ -291,7 +303,7 @@ def SigmaDot_ExtPhoto(sim):
     # Obtain the surface density profile using the mass of each ring as a weight factor
     # Remember to add the (-) sign to the surface density mass loss rate
     SigmaDot = np.zeros_like(sim.grid.r)
-    SigmaDot[ir_ext:] = -sim.gas.Sigma[ir_ext:] *  mass_loss_ext / mass_ext
+    SigmaDot[mask] = -sim.gas.Sigma[mask] *  mass_loss_ext / mass_ext
 
 
     # If the surface density is within a factor of 10 near the floor, stop futhrer mass loss
