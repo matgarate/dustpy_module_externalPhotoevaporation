@@ -266,9 +266,16 @@ def TruncationRadius(sim):
     See Sellek et al. (2020) Figure 2 for reference.
     '''
 
+
     #ir_ext = np.argmax(sim.FRIED.MassLoss)
     #ir_ext = np.size(sim.FRIED.MassLoss) - np.argmax(sim.FRIED.MassLoss[::-1]) - 1
 
+
+    # Near the FRIED limit, the truncation radius is extremely sensitive to small variations in the MassLoss profile.
+    # To avoid these small variation giving large differences we round them
+    # If the profile is completely constant, the truncation radius becomes the last grid cell
+
+    MassLoss = sim.FRIED.MassLoss / (c.M_sun/c.year)
     # round to 10^-12 solar masses per year
     MassLoss = np.round(MassLoss, 12)
     ir_ext = np.size(MassLoss) - np.argmax(MassLoss[::-1]) - 1
