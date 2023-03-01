@@ -14,7 +14,7 @@ from functions_externalPhotoevaporation import SigmaDot_ExtPhoto, SigmaDot_ExtPh
 ################################################################################################
 
 def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat", UV_Flux = 1000.,
-                                            factor_SigmaFloor = 1.e-15, threshold_MassLoss = 1.05e-10 * c.M_sun/c.year):
+                                            SigmaFloor = 1.e-40):
     '''
     Add external photoevaporation using the FRIED grid (Haworth et al., 2018) and the Sellek et al.(2020) implementation.
     This setup routine also performs the interpolation in the stellar mass and UV flux parameters.
@@ -29,8 +29,7 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     fried_filename:             FRIED grid from Haworth+(2018), download from: http://www.friedgrid.com/Downloads/
     UV_target [G0]:             External UV Flux
 
-    factor_SigmaFloor:          Re-adjust the floor value of the gas surface density to improve the simulation performance
-    threshold_MassLoss[g/s]:    Further mass loss is prevented if the estimated mass loss rate drops below this treshold
+    SigmaFloor:                 Re-adjust the floor value of the gas surface density to improve the simulation performance
 
     ----------------------------------------------
     '''
@@ -80,9 +79,6 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     sim.updater = ['star', 'grid', 'FRIED', 'gas', 'dust']
     sim.FRIED.updater = ['rTrunc' ,'MassLoss']
 
-    # Set a loss rate threshold
-    # Prevents the simulation from getting stuck at very low disk masses
-    sim.FRIED.addfield('Threshold_MassLoss', threshold_MassLoss, description = 'Further mass loss is prevented if the estimated value is below the threshold [g/s]')
 
 
     ###############################
@@ -114,8 +110,9 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     ##################################
     # Setting higher floor value than the default avoids excessive mass loss rate calculations at the outer edge.
     # This speeds the code significantly, while still reproducing the results from Sellek et al.(2020)
-    sim.gas.SigmaFloor = factor_SigmaFloor * sim.gas.Sigma
-    sim.gas.SigmaFloor[-1] = 1.e-25
+
+    sim.gas.SigmaFloor = SigmaFloor
+
 
     sim.update()
 

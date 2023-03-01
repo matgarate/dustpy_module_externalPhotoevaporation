@@ -303,9 +303,6 @@ def SigmaDot_ExtPhoto(sim):
     # Total mass loss rate.
     mass_loss_ext = np.sum((sim.FRIED.MassLoss * mass_profile)[mask] / mass_ext)
 
-    # Under the threshold further mass loss is prevented
-    if mass_loss_ext <= sim.FRIED.Threshold_MassLoss:
-        mass_loss_ext = 0.
 
     # Obtain the surface density profile using the mass of each ring as a weight factor
     # Remember to add the (-) sign to the surface density mass loss rate
