@@ -18,9 +18,9 @@ from setup_externalPhotoevaporation import setup_gasonly
 # FRIED GRID PARAMETERS
 ################################
 # The stellar mass and UV flux are pre-defined to reduce the interpolation space of the FRIED grid.
-# The values stellar mass [Msun] and UV flux[G0] need to available in the FRIED grid.
-param_StellarMass = 1.0     # Available stellar masses [Msun]:     [0.05 0.1  0.3  0.5  0.8  1.   1.3  1.6  1.9 ]
-param_UVFlux = 1.e3         # Available UV fluxes [G0]:          [10.   100.  1000.  5000. 10000.]
+# The values stellar mass [Msun] and UV flux[G0] need to be within the range of the FRIED GRID.
+param_StellarMass = 1.0     # Stellar mass range [Msun]:     [0.05 -  1.9 ]
+param_UVFlux = 1.e3         # UV flux range [G0]:          [10.   - 10000.]
 
 
 ################################
