@@ -2,6 +2,8 @@ import numpy as np
 from dustpy import constants as c
 from scipy.interpolate import interp1d, LinearNDInterpolator
 
+import sys
+
 
 #####################################
 #
@@ -150,8 +152,8 @@ def get_MassLoss_ResampleGrid(fried_filename = "./friedgrid.dat",
     Resample the FRIED grid into a new radial-Sigma grid for a target stellar mass and UV Flux
     --------------------------------------------
     fried_filename:                      FRIED grid from Haworth+(2018), download from: http://www.friedgrid.com/Downloads/
-    Mstar_target [M_sun]:                Target stellar mass to reconstruct the FRIED grid
-    UV_target [G0]:                      Target external UV flux to reconstruct the FRIED grid
+    Mstar_target [M_sun]:                Target stellar mass to reconstruct the FRIED grid (Must be between 0.05 - 1.9)
+    UV_target [G0]:                      Target external UV flux to reconstruct the FRIED grid (Must be between 10 - 10^4)
 
     grid_radii[array (nr), AU]:                     Target radial grid array to reconstruct the FRIED grid
     grid_Sigma[array (nSig), g/cm^2]:               Target Sigma grid array to reconstruct the FRIED grid
@@ -163,6 +165,7 @@ def get_MassLoss_ResampleGrid(fried_filename = "./friedgrid.dat",
     --------------------------------------------
 
     '''
+
     if grid_radii is None:
         grid_radii = np.linspace(1, 400, num = 50)
     if grid_Sigma is None:
@@ -195,8 +198,17 @@ def get_MassLoss_ResampleGrid(fried_filename = "./friedgrid.dat",
     unique_Mstar = np.unique(Table_Mstar)
     unique_UV = np.unique(Table_UV)
 
+    # Check that the UV and Stellar mass are within the FRIED grid
+    if Mstar_target < unique_Mstar.min() or Mstar_target > unique_Mstar.max():
+        print('Stellar mass out of the FRIED grid boundaries. [0.05 - 1.9] Msun')
+
+    if UV_target < unique_UV.min() or UV_target > unique_UV.max():
+        print('UV flux out of the FRIED grid boundaries. [10 - 10^4] G0')
+
+
     i_Mstar = np.searchsorted(unique_Mstar, Mstar_target)
     i_UV = np.searchsorted(unique_UV, UV_target)
+
 
     # Left/Right values around the available UV and Star Flux
     Mstar_lr = unique_Mstar[[i_Mstar - 1 , i_Mstar]]
