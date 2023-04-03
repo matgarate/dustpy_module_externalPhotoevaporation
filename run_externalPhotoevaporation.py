@@ -57,8 +57,8 @@ sim.ini.dust.vfrag = 1000.0                 # Dust fragmentation velocity [cm/s]
 
 # Radial Grid Parameters
 sim.ini.grid.Nr = 250
-sim.ini.grid.rmin = 5 * c.au
-sim.ini.grid.rmax = 500 * c.au
+sim.ini.grid.rmin = 4 * c.au
+sim.ini.grid.rmax = 400 * c.au
 
 
 
