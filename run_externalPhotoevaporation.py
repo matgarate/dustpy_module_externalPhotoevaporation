@@ -27,9 +27,9 @@ param_UVFlux = 1.e3         # UV flux range [G0]:          [10.   - 10000.]
 # OPTIONAL PARAMETERS
 ################################
 
-option_sqrt_grid = True         # Run the simulation with a grid linearly spaced in r^1/2
-option_track_lostdust = True    # Track the time evolution of the mass lost by external photoevaporation
-option_gasonly = False           # Deactivate the dust evolution (ideal for quick tests)
+option_track_lostdust = True        # Track the time evolution of the mass lost by external photoevaporation
+option_sqrt_grid =      True        # Run the simulation with a grid linearly spaced in r^1/2
+option_gasonly =        False       # Deactivate the dust evolution (ideal for quick tests)
 
 
 ################################
