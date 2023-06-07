@@ -77,7 +77,7 @@ def setup_externalPhotoevaporation_FRIED(sim, fried_filename = "./friedgrid.dat"
     sim.FRIED.rTrunc.updater = TruncationRadius
     sim.FRIED.MassLoss.updater =  MassLoss_FRIED
     sim.updater = ['star', 'grid', 'FRIED', 'gas', 'dust']
-    sim.FRIED.updater = ['rTrunc' ,'MassLoss']
+    sim.FRIED.updater = ['MassLoss', 'rTrunc' ]
 
 
 
