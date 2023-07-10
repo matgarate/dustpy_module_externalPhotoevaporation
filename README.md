@@ -13,3 +13,5 @@ To setup the external photoevaporation module, add the following lines after ini
 See the `run_externalPhotoevaporation.py` code for an example.
 
 If you use this module, please cite Gárate et al. (in prep.)
+
+This module is currently being implemented into the [Dustpylib](https://github.com/stammler/dustpylib) under the `dustpylib.photoevaporation.external` module.
